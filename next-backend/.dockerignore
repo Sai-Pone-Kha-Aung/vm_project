@@ -1,0 +1,6 @@
+node_modules
+.next
+.git
+.DS_Store
+*.local
+npm-debug.log*
