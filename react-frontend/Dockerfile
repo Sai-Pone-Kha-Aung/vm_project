@@ -1,30 +1,34 @@
-# Stage 1: Build Vite React project
-FROM node:20-alpine AS builder
+# Build stage 
 
-WORKDIR /app
+FROM node:22-alpine AS build 
 
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci
+WORKDIR /app 
+ 
+COPY package*.json ./ 
 
-# Copy source files
-COPY . .
+RUN npm ci 
+ 
+COPY . . 
 
-# Set empty VITE_API_URL so that API calls use relative paths (e.g., fetch('/api/...'))
-ENV VITE_API_URL=""
+# Vite inlines VITE_* vars at build time; pass via --build-arg to override .env files 
 
-# Build production assets into dist/
-RUN npm run build
+ARG VITE_API_URL 
 
-# Stage 2: Serve static bundle using Nginx
-FROM nginx:alpine
+ENV VITE_API_URL=$VITE_API_URL 
 
-# Copy custom Nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN npm run build 
 
-# Copy compiled static files from the builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+ 
+# Production stage 
 
-EXPOSE 80
+FROM nginx:alpine AS production 
 
-CMD ["nginx", "-g", "daemon off;"]
+COPY --from=build /app/dist /usr/share/nginx/html 
+
+COPY nginx.conf /etc/nginx/conf.d/default.conf 
+
+ 
+
+EXPOSE 80 
+
+CMD ["nginx", "-g", "daemon off;"] 

@@ -1,28 +1,42 @@
-# Use Node.js 20 LTS Alpine image
-FROM node:20-alpine
+# Dependencies stage 
 
-WORKDIR /app
+FROM node:22-alpine AS deps 
 
-# Set environment
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+WORKDIR /app 
+# python3/make/g++ needed to build native modules (bcrypt) 
+RUN apk add --no-cache python3 make g++ 
+COPY package*.json ./ 
+RUN npm ci 
 
-# Install libc compatibility library (required for some Node packages)
-RUN apk add --no-cache libc6-compat
+# Build stage 
 
-# Install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci
+FROM node:22-alpine AS builder 
+WORKDIR /app 
+COPY --from=deps /app/node_modules ./node_modules 
+COPY . . 
+RUN npm run build 
 
-# Copy source code
-COPY . .
+# Runtime stage 
 
-# Build Next.js application
-RUN npm run build
+FROM node:22-alpine AS runner 
+WORKDIR /app 
+ENV NODE_ENV=production 
+RUN addgroup --system --gid 1001 nodejs \ 
+    && adduser --system --uid 1001 nextjs 
+COPY --from=builder /app/public ./public 
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./ 
 
-# Expose internal port
-EXPOSE 3000
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static 
 
-# Start Next.js production server
-CMD ["npm", "run", "start"]
+USER nextjs 
+EXPOSE 3000 
+ENV PORT=3000 
+ENV HOSTNAME=0.0.0.0 
+
+# Runtime secrets (MONGODB_URI, JWT_SECRET, etc.) must be provided via 
+
+# `docker run --env-file .env.local` or your orchestrator's env config, 
+
+# not baked into the image. 
+
+CMD ["node", "server.js"] 
