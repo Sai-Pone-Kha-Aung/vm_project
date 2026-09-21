@@ -1,0 +1,36 @@
+version: "3.8"
+
+services:
+  # Next.js Backend Service
+  backend:
+    build:
+      context: ./next-backend
+      dockerfile: Dockerfile
+    container_name: next_backend
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    env_file:
+      - .env
+    networks:
+      - app_network
+    # Notice: port 3000 is NOT exposed publicly; requests route through Nginx
+
+  # React Frontend + Nginx Reverse Proxy Service
+  frontend:
+    build:
+      context: ./react-frontend
+      dockerfile: Dockerfile
+    container_name: react_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge
